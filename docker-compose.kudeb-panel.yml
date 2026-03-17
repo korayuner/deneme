@@ -1,0 +1,27 @@
+# KUDEB Panel servisi — mevcut docker-compose.yml'e eklenecek bölüm
+# Kullanım: mevcut docker-compose.yml dosyasına bu servis tanımını ekleyin
+
+# services:
+#   ...mevcut servisler...
+
+  kudeb-panel:
+    build:
+      context: ./kudeb-panel
+      dockerfile: Dockerfile
+      args:
+        VITE_PAPERLESS_EXTERNAL_URL: "https://paperless.urla.online"
+    restart: unless-stopped
+    environment:
+      - DIRECTUS_URL=http://directus:8055
+      - DIRECTUS_TOKEN=kudeb_directus_static_token_2026
+      - PAPERLESS_URL=http://paperless-ngx:8000
+      - PAPERLESS_TOKEN=99f9f7bccdb06e532e4ae58780139859ba5278a5
+      - N8N_URL=http://n8n:5678
+    networks:
+      - default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kudeb-panel.rule=Host(`kudeb.urla.online`)"
+      - "traefik.http.routers.kudeb-panel.entrypoints=websecure"
+      - "traefik.http.routers.kudeb-panel.tls.certresolver=letsencrypt"
+      - "traefik.http.services.kudeb-panel.loadbalancer.server.port=80"
