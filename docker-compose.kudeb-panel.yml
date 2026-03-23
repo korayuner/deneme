@@ -25,3 +25,29 @@
       - "traefik.http.routers.kudeb-panel.entrypoints=websecure"
       - "traefik.http.routers.kudeb-panel.tls.certresolver=letsencrypt"
       - "traefik.http.services.kudeb-panel.loadbalancer.server.port=80"
+
+  pdf-service:
+    build:
+      context: ./pdf-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # Gemini API — virgülle ayrılmış birden fazla anahtar (yedek sistem)
+      - GEMINI_API_KEYS=BURAYA_API_ANAHTARI_YAZ
+      - GEMINI_MODELS=gemini-2.5-flash,gemini-1.5-pro
+      # Directus
+      - DIRECTUS_URL=http://directus:8055
+      - DIRECTUS_TOKEN=kudeb_directus_static_token_2026
+      # Paperless-ngx
+      - PAPERLESS_URL=http://paperless-ngx:8000
+      - PAPERLESS_TOKEN=99f9f7bccdb06e532e4ae58780139859ba5278a5
+      # Paperless custom field ID'leri (Paperless admin'den kontrol et)
+      - PAPERLESS_CF_ADA=5
+      - PAPERLESS_CF_PARSEL=6
+      - PAPERLESS_CF_ILCE=3
+      - PAPERLESS_CF_MAHALLE=4
+      # CORS
+      - ALLOWED_ORIGIN=https://kudeb.urla.online
+    networks:
+      - default
+    # NOT: Traefik label yok — sadece iç ağdan erişilir (kudeb-panel üzerinden proxy)

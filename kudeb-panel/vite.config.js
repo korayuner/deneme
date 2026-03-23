@@ -22,6 +22,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/n8n/, ''),
       },
+      '/api/pdf': {
+        target: process.env.PDF_SERVICE_URL || 'http://pdf-service:4000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/pdf/, ''),
+      },
     },
   },
   preview: {
