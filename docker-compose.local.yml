@@ -154,7 +154,7 @@ services:
         VITE_PAPERLESS_EXTERNAL_URL: "http://localhost:8001"
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "3001:80"
     environment:
       DIRECTUS_URL: http://directus:8055
       DIRECTUS_TOKEN: kudeb_directus_static_token_2026
