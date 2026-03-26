@@ -1,56 +1,56 @@
-import { convert } from 'opendataloader-pdf'
-import { writeFile, readFile, unlink, mkdtemp } from 'fs/promises'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { readFile } from 'fs/promises'
 
 /**
  * PDF veya Word dosyasından metin çıkarır.
- * OpenDataLoader PDF → Markdown çıktı → Gemini'ye daha temiz metin gider.
+ * PDF  → pdf-parse
+ * DOCX → mammoth
  *
  * @param {string} filePath  Geçici dosya yolu
  * @param {string} mimeType  MIME türü
  * @returns {{ metin: string, sayfa_sayisi: number }}
  */
 export async function extractText(filePath, mimeType) {
-  const tmpDir = await mkdtemp(join(tmpdir(), 'kudeb-'))
+  if (
+    mimeType === 'application/pdf' ||
+    filePath.toLowerCase().endsWith('.pdf')
+  ) {
+    return extractPdf(filePath)
+  }
 
-  try {
-    await convert({
-      input_path: [filePath],
-      output_dir: tmpDir,
-      format: 'markdown',  // Markdown → başlık/tablo yapısı korunur
-      ocr: true,           // Taranmış PDF desteği (Türkçe dahil 80+ dil)
-    })
+  if (
+    mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    filePath.toLowerCase().endsWith('.docx')
+  ) {
+    return extractDocx(filePath)
+  }
 
-    // Çıktı dosyası: <orijinal_ad>.md
-    const files = await import('fs').then(fs =>
-      fs.readdirSync(tmpDir).filter(f => f.endsWith('.md'))
-    )
+  // Diğer dosyalar (txt, csv vb.) — düz metin olarak oku
+  const metin = await readFile(filePath, 'utf-8').catch(() => '')
+  return { metin: metin.trim(), sayfa_sayisi: 1 }
+}
 
-    if (files.length === 0) {
-      return { metin: '', sayfa_sayisi: 0 }
-    }
-
-    const metin = await readFile(join(tmpDir, files[0]), 'utf-8')
-
-    // Sayfa sayısını tahmin et (Markdown'daki --- ayırıcılardan)
-    const sayfa_sayisi = (metin.match(/^---$/gm) || []).length + 1
-
-    return { metin: temizle(metin), sayfa_sayisi }
-
-  } finally {
-    // Geçici çıktı klasörünü temizle
-    await import('fs').then(fs => fs.rmSync(tmpDir, { recursive: true, force: true }))
+async function extractPdf(filePath) {
+  const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default
+  const buffer = await readFile(filePath)
+  const data = await pdfParse(buffer)
+  return {
+    metin: temizle(data.text),
+    sayfa_sayisi: data.numpages || 1,
   }
 }
 
-/**
- * Markdown metnini Gemini için temizler:
- * - Tekrarlayan boş satırları azaltır
- * - Sayfa başlıklarını/altbilgilerini kaldırır (OpenDataLoader bunu zaten yapar)
- */
+async function extractDocx(filePath) {
+  const mammoth = (await import('mammoth')).default
+  const result = await mammoth.extractRawText({ path: filePath })
+  return {
+    metin: temizle(result.value),
+    sayfa_sayisi: 1,
+  }
+}
+
 function temizle(metin) {
   return metin
-    .replace(/\n{3,}/g, '\n\n')  // 3+ boş satır → 2
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim()
 }

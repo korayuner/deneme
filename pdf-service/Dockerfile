@@ -1,8 +1,4 @@
-# Java 17 + Node.js 20 — OpenDataLoader PDF için ikisi de gerekli
-FROM eclipse-temurin:17-jre-alpine
-
-# Node.js kur
-RUN apk add --no-cache nodejs npm
+FROM node:20-alpine
 
 WORKDIR /app
 
