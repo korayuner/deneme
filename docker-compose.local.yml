@@ -1,0 +1,179 @@
+# KUDEB Panel — Lokal Geliştirme Ortamı
+# Kullanım: docker compose -f docker-compose.local.yml up -d
+# Panel: http://localhost:3000
+# Directus Admin: http://localhost:8055  (admin@kudeb.local / kudeb2026)
+# Paperless: http://localhost:8000       (admin / kudeb2026)
+
+services:
+
+  # ─── Veritabanı (Directus için) ────────────────────────────────────────────
+  postgres:
+    image: postgis/postgis:15-3.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: directus
+      POSTGRES_PASSWORD: directus
+      POSTGRES_DB: directus
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U directus"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis (Directus cache + Paperless kuyruk) ─────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  # ─── Directus (İş veritabanı API) ─────────────────────────────────────────
+  directus:
+    image: directus/directus:11
+    restart: unless-stopped
+    ports:
+      - "8055:8055"
+    environment:
+      SECRET: kudeb-secret-key-lokal-2026
+      DB_CLIENT: pg
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: directus
+      DB_USER: directus
+      DB_PASSWORD: directus
+      CACHE_ENABLED: "true"
+      CACHE_STORE: redis
+      REDIS: redis://redis:6379
+      ADMIN_EMAIL: admin@kudeb.local
+      ADMIN_PASSWORD: kudeb2026
+      PUBLIC_URL: http://localhost:8055
+      CORS_ENABLED: "true"
+      CORS_ORIGIN: "http://localhost:3000,http://localhost:8055"
+      EXTENSIONS_AUTO_RELOAD: "true"
+    volumes:
+      - directus_uploads:/directus/uploads
+      - directus_extensions:/directus/extensions
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # ─── Directus Init (ilk çalıştırmada static token + koleksiyon oluşturur) ─
+  directus-init:
+    image: curlimages/curl:latest
+    restart: "no"
+    depends_on:
+      - directus
+    volumes:
+      - ./scripts/directus-init.sh:/init.sh:ro
+    entrypoint: ["sh", "/init.sh"]
+    environment:
+      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_ADMIN_EMAIL: admin@kudeb.local
+      DIRECTUS_ADMIN_PASSWORD: kudeb2026
+      DIRECTUS_STATIC_TOKEN: kudeb_directus_static_token_2026
+
+  # ─── Paperless-ngx (Belge arşivi) ─────────────────────────────────────────
+  paperless-postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: paperless
+      POSTGRES_DB: paperless
+    volumes:
+      - paperless_postgres_data:/var/lib/postgresql/data
+
+  paperless-ngx:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      PAPERLESS_REDIS: redis://redis:6379
+      PAPERLESS_DBHOST: paperless-postgres
+      PAPERLESS_DBUSER: paperless
+      PAPERLESS_DBPASS: paperless
+      PAPERLESS_DBNAME: paperless
+      PAPERLESS_SECRET_KEY: paperless-secret-2026
+      PAPERLESS_URL: http://localhost:8000
+      PAPERLESS_ADMIN_USER: admin
+      PAPERLESS_ADMIN_PASSWORD: kudeb2026
+      PAPERLESS_OCR_LANGUAGE: tur+eng
+      PAPERLESS_TIME_ZONE: Europe/Istanbul
+      PAPERLESS_OCR_MODE: skip
+    volumes:
+      - paperless_data:/usr/src/paperless/data
+      - paperless_media:/usr/src/paperless/media
+      - paperless_export:/usr/src/paperless/export
+      - paperless_consume:/usr/src/paperless/consume
+    depends_on:
+      - paperless-postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "-S", "--max-time", "2", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ─── pdf-service (PDF analiz + Google Drive) ──────────────────────────────
+  pdf-service:
+    build:
+      context: ./pdf-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      GEMINI_API_KEYS: ${GEMINI_API_KEYS:-GEMINI_KEY_GIRILMEDI}
+      GEMINI_MODELS: gemini-2.5-flash,gemini-1.5-pro
+      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_TOKEN: kudeb_directus_static_token_2026
+      PAPERLESS_URL: http://paperless-ngx:8000
+      PAPERLESS_TOKEN: ${PAPERLESS_TOKEN:-}
+      PAPERLESS_CF_ADA: ${PAPERLESS_CF_ADA:-5}
+      PAPERLESS_CF_PARSEL: ${PAPERLESS_CF_PARSEL:-6}
+      PAPERLESS_CF_ILCE: ${PAPERLESS_CF_ILCE:-3}
+      PAPERLESS_CF_MAHALLE: ${PAPERLESS_CF_MAHALLE:-4}
+      ALLOWED_ORIGIN: http://localhost:3000
+      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials.json
+      GOOGLE_DRIVE_ROOT_FOLDER_ID: ${GOOGLE_DRIVE_ROOT_FOLDER_ID:-}
+    volumes:
+      - ./google-service-account.json:/app/credentials.json:ro
+    depends_on:
+      - directus
+      - paperless-ngx
+
+  # ─── kudeb-panel (React arayüzü) ──────────────────────────────────────────
+  kudeb-panel:
+    build:
+      context: ./kudeb-panel
+      dockerfile: Dockerfile
+      args:
+        VITE_PAPERLESS_EXTERNAL_URL: "http://localhost:8000"
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    environment:
+      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_TOKEN: kudeb_directus_static_token_2026
+      PAPERLESS_URL: http://paperless-ngx:8000
+      PAPERLESS_TOKEN: ${PAPERLESS_TOKEN:-}
+      N8N_URL: http://n8n:5678
+      PDF_SERVICE_URL: http://pdf-service:4000
+    depends_on:
+      - directus
+      - paperless-ngx
+      - pdf-service
+
+volumes:
+  postgres_data:
+  redis_data:
+  directus_uploads:
+  directus_extensions:
+  paperless_postgres_data:
+  paperless_data:
+  paperless_media:
+  paperless_export:
+  paperless_consume:
