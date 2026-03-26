@@ -48,6 +48,12 @@
       - PAPERLESS_CF_MAHALLE=4
       # CORS
       - ALLOWED_ORIGIN=https://kudeb.urla.online
+      # Google Drive entegrasyonu
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
+      - GOOGLE_DRIVE_ROOT_FOLDER_ID=${GOOGLE_DRIVE_ROOT_FOLDER_ID}
+    volumes:
+      # Service Account JSON anahtarı — Google Cloud Console'dan indirilerek buraya kopyalanmalı
+      - ./google-service-account.json:/app/credentials.json:ro
     networks:
       - default
     # NOT: Traefik label yok — sadece iç ağdan erişilir (kudeb-panel üzerinden proxy)
