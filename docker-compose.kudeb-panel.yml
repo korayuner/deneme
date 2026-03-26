@@ -53,6 +53,7 @@
       - GOOGLE_DRIVE_ROOT_FOLDER_ID=${GOOGLE_DRIVE_ROOT_FOLDER_ID}
     volumes:
       # Service Account JSON anahtarı — Google Cloud Console'dan indirilerek buraya kopyalanmalı
+      # Dosya yoksa placeholder oluştur: echo '{}' > google-service-account.json
       - ./google-service-account.json:/app/credentials.json:ro
     networks:
       - default

@@ -17,17 +17,28 @@
  */
 
 import { google } from 'googleapis'
-import { createReadStream } from 'fs'
+import { createReadStream, existsSync } from 'fs'
 
 const ROOT_FOLDER_ID = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID
 
+function isDriveKonfigurasyon() {
+  const keyFile = process.env.GOOGLE_APPLICATION_CREDENTIALS
+  return !!(keyFile && existsSync(keyFile) && ROOT_FOLDER_ID)
+}
+
 function getDrive() {
+  const keyFile = process.env.GOOGLE_APPLICATION_CREDENTIALS
+  if (!keyFile || !existsSync(keyFile)) {
+    throw new Error('Google Drive yapılandırılmamış. GOOGLE_APPLICATION_CREDENTIALS dosyası bulunamadı.')
+  }
   const auth = new google.auth.GoogleAuth({
-    keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+    keyFile,
     scopes: ['https://www.googleapis.com/auth/drive'],
   })
   return google.drive({ version: 'v3', auth })
 }
+
+export { isDriveKonfigurasyon }
 
 // ─── Klasör Yönetimi ─────────────────────────────────────────────────────────
 

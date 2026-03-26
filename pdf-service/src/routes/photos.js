@@ -5,7 +5,7 @@ import {
   getVeyaOlusturIsKlasoru,
   getVeyaOlusturIncelemeKlasoru,
   fotografYukle,
-  tumIncelmeleriGetir,
+  isDriveKonfigurasyon,
 } from '../services/drive.js'
 import axios from 'axios'
 
@@ -37,6 +37,13 @@ router.post('/upload', upload.array('photos', 20), async (req, res) => {
   const tmpPaths = (req.files || []).map(f => f.path)
 
   try {
+    if (!isDriveKonfigurasyon()) {
+      await Promise.all(tmpPaths.map(p => unlink(p).catch(() => {})))
+      return res.status(503).json({
+        error: 'Google Drive yapılandırılmamış. Sunucuda google-service-account.json ve GOOGLE_DRIVE_ROOT_FOLDER_ID gerekli.',
+      })
+    }
+
     const { is_no, ilce, mahalle, ada, parsel, inceleme_tarihi, inceleme_aciklama } = req.body
 
     if (!req.files?.length) return res.status(400).json({ error: 'Fotoğraf bulunamadı.' })
