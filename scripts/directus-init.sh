@@ -12,27 +12,26 @@ echo "Directus hazır olana kadar bekleniyor..."
 until curl -sf "$DIRECTUS_URL/server/health" > /dev/null 2>&1; do
   sleep 3
 done
-echo "Directus hazır."
+echo "Directus sağlık kontrolü geçti, tam başlaması bekleniyor..."
+sleep 10
 
-# 1. Admin ile giriş yap
+# 1. Admin ile giriş yap — en fazla 15 deneme, 8'er saniye aralıkla
 echo "Admin token alınıyor..."
-LOGIN=$(curl -sf -X POST "$DIRECTUS_URL/auth/login" \
-  -H "Content-Type: application/json" \
-  -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}")
-
-ACCESS_TOKEN=$(echo "$LOGIN" | grep -o '"access_token":"[^"]*"' | head -1 | cut -d'"' -f4)
-
-if [ -z "$ACCESS_TOKEN" ]; then
-  echo "HATA: Admin girişi başarısız. Directus tam başlamış olmayabilir, 10 saniye bekleniyor..."
-  sleep 10
+ACCESS_TOKEN=""
+DENEME=0
+while [ -z "$ACCESS_TOKEN" ] && [ "$DENEME" -lt 15 ]; do
+  DENEME=$((DENEME + 1))
+  echo "  Giriş denemesi $DENEME/15..."
   LOGIN=$(curl -sf -X POST "$DIRECTUS_URL/auth/login" \
     -H "Content-Type: application/json" \
-    -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}")
+    -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}" 2>/dev/null)
   ACCESS_TOKEN=$(echo "$LOGIN" | grep -o '"access_token":"[^"]*"' | head -1 | cut -d'"' -f4)
-fi
+  [ -z "$ACCESS_TOKEN" ] && sleep 8
+done
 
 if [ -z "$ACCESS_TOKEN" ]; then
-  echo "HATA: Admin girişi tekrar başarısız. Script sonlandırılıyor."
+  echo "HATA: Directus 2 dakikada yanıt vermedi. Loglara bak:"
+  echo "  docker compose -f docker-compose.local.yml logs directus"
   exit 1
 fi
 

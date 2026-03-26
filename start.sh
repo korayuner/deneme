@@ -32,8 +32,7 @@ echo "→ Servisler başlatılıyor..."
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
 
 echo ""
-echo "→ Directus başlaması bekleniyor (30-60 saniye)..."
-sleep 15
+echo "→ Directus başlaması bekleniyor (init script kendi bekleyecek)..."
 
 # Init container'ı çalıştır (token + koleksiyon)
 echo "→ Directus yapılandırılıyor..."
