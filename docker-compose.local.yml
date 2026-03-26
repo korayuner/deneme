@@ -46,7 +46,7 @@ services:
       CACHE_ENABLED: "true"
       CACHE_STORE: redis
       REDIS: redis://redis:6379
-      ADMIN_EMAIL: admin@kudeb.local
+      ADMIN_EMAIL: admin@example.com
       ADMIN_PASSWORD: kudeb2026
       PUBLIC_URL: http://localhost:8055
       CORS_ENABLED: "true"
@@ -72,7 +72,7 @@ services:
     entrypoint: ["sh", "/init.sh"]
     environment:
       DIRECTUS_URL: http://directus:8055
-      DIRECTUS_ADMIN_EMAIL: admin@kudeb.local
+      DIRECTUS_ADMIN_EMAIL: admin@example.com
       DIRECTUS_ADMIN_PASSWORD: kudeb2026
       DIRECTUS_STATIC_TOKEN: kudeb_directus_static_token_2026
 

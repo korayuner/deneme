@@ -4,7 +4,7 @@
 # - kudeb_fotograflar koleksiyonunu oluşturur
 
 DIRECTUS_URL="${DIRECTUS_URL:-http://directus:8055}"
-ADMIN_EMAIL="${DIRECTUS_ADMIN_EMAIL:-admin@kudeb.local}"
+ADMIN_EMAIL="${DIRECTUS_ADMIN_EMAIL:-admin@example.com}"
 ADMIN_PASSWORD="${DIRECTUS_ADMIN_PASSWORD:-kudeb2026}"
 STATIC_TOKEN="${DIRECTUS_STATIC_TOKEN:-kudeb_directus_static_token_2026}"
 
