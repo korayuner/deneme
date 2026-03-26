@@ -91,7 +91,7 @@ services:
     image: ghcr.io/paperless-ngx/paperless-ngx:latest
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8001:8000"
     environment:
       PAPERLESS_REDIS: redis://redis:6379
       PAPERLESS_DBHOST: paperless-postgres
@@ -151,7 +151,7 @@ services:
       context: ./kudeb-panel
       dockerfile: Dockerfile
       args:
-        VITE_PAPERLESS_EXTERNAL_URL: "http://localhost:8000"
+        VITE_PAPERLESS_EXTERNAL_URL: "http://localhost:8001"
     restart: unless-stopped
     ports:
       - "3000:80"
