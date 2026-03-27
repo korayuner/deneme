@@ -1,6 +1,7 @@
 import { ExternalLink } from 'lucide-react'
-import { InlineEditText, InlineEditDate } from '../../common/InlineEdit'
+import { InlineEditText, InlineEditDate, InlineEditSelect } from '../../common/InlineEdit'
 import { useUpdateJob } from '../../../hooks/useJobs'
+import { usePersoneller } from '../../../hooks/usePersonel'
 import { formatDate, getVadeDurumu } from '../../../utils/date'
 import Badge from '../../common/Badge'
 import clsx from 'clsx'
@@ -16,6 +17,8 @@ function Field({ label, children, className = '' }) {
 
 export default function SummaryTab({ job }) {
   const { mutate: updateJob } = useUpdateJob()
+  const { data: personeller = [] } = usePersoneller()
+  const personelAdlari = personeller.map((p) => p.ad)
 
   const update = (field) => (value) => {
     updateJob({ id: job.id, data: { [field]: value } })
@@ -53,9 +56,10 @@ export default function SummaryTab({ job }) {
         <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Durum & Görev</h3>
         <dl className="grid grid-cols-1 gap-y-3">
           <Field label="Görevli Personel">
-            <InlineEditText
+            <InlineEditSelect
               value={job.gorevli_personel}
               onSave={update('gorevli_personel')}
+              options={personelAdlari}
               placeholder="Atanmadı"
             />
           </Field>
