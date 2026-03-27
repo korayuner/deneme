@@ -25,13 +25,17 @@ const useStore = create(
       filterVade: '',
       setFilterVade: (v) => set({ filterVade: v }),
 
+      // View mode: 'list' | 'map'
+      viewMode: 'list',
+      setViewMode: (mode) => set({ viewMode: mode }),
+
       // Theme
       darkMode: false,
       toggleDarkMode: () => set((s) => ({ darkMode: !s.darkMode })),
     }),
     {
       name: 'kudeb-panel-store',
-      partialize: (state) => ({ darkMode: state.darkMode }),
+      partialize: (state) => ({ darkMode: state.darkMode, viewMode: state.viewMode }),
     },
   ),
 )

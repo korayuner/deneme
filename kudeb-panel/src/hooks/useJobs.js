@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getJobs, getJob, updateJob, getJobFilterOptions } from '../api/directus'
+import { getJobs, getJob, updateJob, getJobFilterOptions, getJobsForMap } from '../api/directus'
 import toast from 'react-hot-toast'
 
 export const useJobs = (params) => {
@@ -39,5 +39,13 @@ export const useJobFilterOptions = () => {
     queryKey: ['job-filter-options'],
     queryFn: getJobFilterOptions,
     staleTime: 5 * 60 * 1000,
+  })
+}
+
+export const useJobsForMap = () => {
+  return useQuery({
+    queryKey: ['jobs-for-map'],
+    queryFn: getJobsForMap,
+    staleTime: 2 * 60 * 1000,
   })
 }

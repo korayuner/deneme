@@ -3,9 +3,10 @@ import useStore from './store/useStore'
 import Header from './components/Layout/Header'
 import JobList from './components/JobList/JobList'
 import JobDetail from './components/JobDetail/JobDetail'
+import FullMap from './components/MapView/FullMap'
 
 export default function App() {
-  const { darkMode } = useStore()
+  const { darkMode, viewMode } = useStore()
 
   useEffect(() => {
     if (darkMode) {
@@ -19,8 +20,14 @@ export default function App() {
     <div className="h-screen flex flex-col overflow-hidden">
       <Header />
       <div className="flex-1 flex overflow-hidden">
-        <JobList />
-        <JobDetail />
+        {viewMode === 'map' ? (
+          <FullMap />
+        ) : (
+          <>
+            <JobList />
+            <JobDetail />
+          </>
+        )}
       </div>
     </div>
   )
