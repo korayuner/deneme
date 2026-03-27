@@ -13,7 +13,7 @@ const directus = axios.create({
 
 export const getJobs = async (params = {}) => {
   const { search, ilce, is_turu, vade_filter, page = 1, limit = 100 } = params
-  const filter = { aktif: { _eq: true } }
+  const filter = {}
 
   if (ilce) filter.ilce_adi = { _eq: ilce }
   if (is_turu) filter.is_turu_adi = { _eq: is_turu }
@@ -37,11 +37,11 @@ export const getJobs = async (params = {}) => {
 
   const response = await directus.get('/items/kudeb_isler', {
     params: {
-      filter: JSON.stringify(filter),
+      ...(Object.keys(filter).length > 0 && { filter: JSON.stringify(filter) }),
       sort: '-date_created',
       limit,
       page,
-      fields: 'id,is_no,ilce_adi,mahalle_adi,ada,parsel,is_turu_adi,gorevli_personel,vade_tarihi,son_durum,belge_sayisi,aktif',
+      fields: 'id,is_no,ilce_adi,mahalle_adi,ada,parsel,is_turu_adi,gorevli_personel,vade_tarihi,son_durum',
     },
   })
   return response.data
@@ -49,9 +49,7 @@ export const getJobs = async (params = {}) => {
 
 export const getJob = async (id) => {
   const response = await directus.get(`/items/kudeb_isler/${id}`, {
-    params: {
-      fields: '*',
-    },
+    params: { fields: '*' },
   })
   return response.data.data
 }
@@ -67,7 +65,6 @@ export const getJobFilterOptions = async () => {
       params: {
         groupBy: 'ilce_adi',
         fields: 'ilce_adi',
-        filter: JSON.stringify({ aktif: { _eq: true } }),
         limit: -1,
       },
     }),
@@ -75,7 +72,6 @@ export const getJobFilterOptions = async () => {
       params: {
         groupBy: 'is_turu_adi',
         fields: 'is_turu_adi',
-        filter: JSON.stringify({ aktif: { _eq: true } }),
         limit: -1,
       },
     }),
