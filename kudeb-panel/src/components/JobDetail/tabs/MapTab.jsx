@@ -90,6 +90,12 @@ function TkgmButton({ job, onFound }) {
               <p className="text-xs font-mono text-green-700 dark:text-green-400 mt-0.5">
                 {sonuc.lat.toFixed(6)}, {sonuc.lon.toFixed(6)}
               </p>
+              {sonuc.duzeltme && (
+                <div className="mt-1.5 text-xs text-amber-700 dark:text-amber-400">
+                  ⚠️ Yazım düzeltildi:{' '}
+                  {sonuc.duzeltme.join(' · ')}
+                </div>
+              )}
             </div>
           </div>
           <button

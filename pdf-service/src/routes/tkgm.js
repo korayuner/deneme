@@ -3,88 +3,74 @@ import axios from 'axios'
 
 const router = express.Router()
 
-const TKGM = 'https://parselsorgu.tkgm.gov.tr/api/sorgu'
+const BASE = 'https://cbsapi.tkgm.gov.tr/megsiswebapi.v3.1/api'
+const IL_ID = 57 // İzmir
+const HEADERS = { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
 
-// Simple in-process cache (il/ilce/mahalle listeleri çok sık değişmez)
+// ─── Cache ────────────────────────────────────────────────
 const cache = new Map()
-
-const tkgmHeaders = {
-  'User-Agent': 'Mozilla/5.0 (compatible; KUDEB/1.0)',
-  'Accept': 'application/json',
-  'Referer': 'https://parselsorgu.tkgm.gov.tr/',
-}
 
 async function tkgmGet(url) {
   if (cache.has(url)) return cache.get(url)
-  const res = await axios.get(url, { headers: tkgmHeaders, timeout: 15000 })
+  const res = await axios.get(url, { headers: HEADERS, timeout: 15000 })
   cache.set(url, res.data)
   return res.data
 }
 
-// Metin normalleştirme: büyük harf + Türkçe karakter dönüşümü
-function normalize(str) {
-  if (!str) return ''
-  return str
-    .toLocaleUpperCase('tr-TR')
-    .replace(/İ/g, 'I')
-    .replace(/Ğ/g, 'G')
-    .replace(/Ş/g, 'S')
-    .replace(/Ç/g, 'C')
-    .replace(/Ö/g, 'O')
-    .replace(/Ü/g, 'U')
-    .trim()
+// ─── Fuzzy matching (n8n workflow'dan birebir alındı) ─────
+
+function norm(str) {
+  return (str || '').toLowerCase()
+    .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's')
+    .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
+    .replace(/\s+mahallesi?$/i, '').replace(/\s+köyü?$/i, '')
+    .replace(/\s+/g, ' ').trim()
 }
 
-// Bir listedeki en iyi eşleşmeyi bul (id ve ad alanları TKGM standardı)
-function enIyiEslesme(liste, aranan) {
-  const norm = normalize(aranan)
-  // Tam eşleşme önce
-  let bulunan = liste.find((x) => normalize(x.ad) === norm)
-  if (!bulunan) {
+function levenshtein(a, b) {
+  const m = a.length, n = b.length
+  const dp = Array.from({ length: m + 1 }, (_, i) =>
+    Array.from({ length: n + 1 }, (_, j) => i === 0 ? j : j === 0 ? i : 0)
+  )
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
+  return dp[m][n]
+}
+
+function fuzzyBul(hedef, liste, textFn, maxDist) {
+  const normHedef = norm(hedef)
+  let enIyi = null, enIyiSkor = 9999
+
+  for (const item of liste) {
+    const t = norm(textFn(item))
+    // Tam eşleşme
+    if (t === normHedef) return { item, skor: 0, eslesen: t }
     // İçerme kontrolü
-    bulunan = liste.find((x) => normalize(x.ad).includes(norm) || norm.includes(normalize(x.ad)))
+    if (t.includes(normHedef) || normHedef.includes(t)) {
+      const skor = levenshtein(normHedef, t)
+      if (skor < enIyiSkor) { enIyiSkor = skor; enIyi = { item, skor, eslesen: t } }
+    }
+    // Levenshtein
+    const skor = levenshtein(normHedef, t)
+    if (skor <= maxDist && skor < enIyiSkor) {
+      enIyiSkor = skor
+      enIyi = { item, skor, eslesen: t }
+    }
   }
-  return bulunan || null
+  return enIyi
 }
 
-// Polygon ya da MultiPolygon koordinatlarından ağırlıksız merkez (centroid)
-function centroid(geometry) {
-  let ring
-  if (geometry.type === 'Polygon') {
-    ring = geometry.coordinates[0]
-  } else if (geometry.type === 'MultiPolygon') {
-    // En büyük halkayı al
-    ring = geometry.coordinates.reduce((prev, cur) =>
-      cur[0].length > prev[0].length ? cur : prev
-    )[0]
-  } else {
-    return null
-  }
+// ─── Mahalle cache (ilçe bazında) ─────────────────────────
+const mahalleCache = {}
 
-  // TKGM koordinatlar bazen [lon, lat] bazen [lat, lon] sırasında gelebilir.
-  // Türkiye için lat: 36-42, lon: 26-45 aralığındadır.
-  // İlk eleman bu aralıkta değilse ters çevir.
-  const [x0, y0] = ring[0]
-  const latFirst = x0 >= 36 && x0 <= 42
-  const n = ring.length
-
-  let sumA = 0, sumB = 0
-  for (const [a, b] of ring) {
-    sumA += a
-    sumB += b
-  }
-
-  const avg1 = sumA / n
-  const avg2 = sumB / n
-
-  if (latFirst) return { lat: avg1, lon: avg2 }
-  return { lat: avg2, lon: avg1 }
-}
+// ─── Endpoint ─────────────────────────────────────────────
 
 /**
  * GET /tkgm/parsel-koordinat
  * Query: ilce_adi, mahalle_adi (opsiyonel), ada, parsel
- * Yanıt: { lat, lon, ada, parsel, adres }
+ * Yanıt: { lat, lon, il, ilce, mahalle, adres, duzeltme }
  */
 router.get('/parsel-koordinat', async (req, res) => {
   const { ilce_adi, mahalle_adi, ada, parsel } = req.query
@@ -94,85 +80,91 @@ router.get('/parsel-koordinat', async (req, res) => {
   }
 
   try {
-    // 1. İl listesi — İzmir = 35 (sabit, ama yine de doğrulayalım)
-    const ilListesi = await tkgmGet(`${TKGM}/il-listesi`)
-    const izmir = enIyiEslesme(ilListesi, 'İZMİR') || enIyiEslesme(ilListesi, 'IZMIR')
-    if (!izmir) return res.status(404).json({ error: 'İzmir ili bulunamadı' })
+    // 1. İlçe listesi (İzmir = 57)
+    const ilceResp = await tkgmGet(`${BASE}/idariYapi/ilceListe/${IL_ID}`)
+    const ilceler = ilceResp.features || []
 
-    // 2. İlçe listesi
-    const ilceListesi = await tkgmGet(`${TKGM}/ilce-listesi/${izmir.id}`)
-    const ilce = enIyiEslesme(ilceListesi, ilce_adi)
-    if (!ilce) {
+    const ilceSonuc = fuzzyBul(ilce_adi, ilceler, (f) => f.properties?.text || '', 3)
+    if (!ilceSonuc) {
       return res.status(404).json({
-        error: `İlçe bulunamadı: ${ilce_adi}`,
-        mevcut: ilceListesi.map((x) => x.ad),
+        error: `İlçe bulunamadı: "${ilce_adi}"`,
+        mevcut: ilceler.map((f) => f.properties?.text),
       })
     }
 
-    // 3. Mahalle listesi
-    const mahalleListesi = await tkgmGet(`${TKGM}/mahalle-koy-listesi/${ilce.id}`)
+    const ilceId = ilceSonuc.item.properties.id
+    const gercekIlce = ilceSonuc.item.properties.text
 
-    let mahalle = null
-    if (mahalle_adi) {
-      mahalle = enIyiEslesme(mahalleListesi, mahalle_adi)
+    // 2. Mahalle listesi (cache'li)
+    if (!mahalleCache[ilceId]) {
+      const mahalleResp = await tkgmGet(`${BASE}/idariYapi/mahalleListe/${ilceId}`)
+      mahalleCache[ilceId] = mahalleResp.features || []
     }
-    // mahalle bulunamazsa ilk mahalleyi deneme — küçük ilçelerde tek mahalle olabilir
-    if (!mahalle) {
-      if (mahalleListesi.length === 1) {
-        mahalle = mahalleListesi[0]
-      } else {
+
+    const mahalleler = mahalleCache[ilceId]
+    let mahalleId, gercekMahalle, mahalleSkor = 0
+
+    if (mahalle_adi) {
+      const mahalleSonuc = fuzzyBul(mahalle_adi, mahalleler, (f) => f.properties?.text || '', 4)
+      if (!mahalleSonuc) {
         return res.status(404).json({
-          error: `Mahalle bulunamadı: ${mahalle_adi}`,
-          mevcut: mahalleListesi.map((x) => x.ad),
+          error: `Mahalle bulunamadı: "${mahalle_adi}" (${gercekIlce})`,
+          mevcut: mahalleler.map((f) => f.properties?.text),
         })
       }
+      mahalleId = mahalleSonuc.item.properties.id
+      gercekMahalle = mahalleSonuc.item.properties.text
+      mahalleSkor = mahalleSonuc.skor
+    } else if (mahalleler.length === 1) {
+      // Tek mahalle varsa direkt kullan
+      mahalleId = mahalleler[0].properties.id
+      gercekMahalle = mahalleler[0].properties.text
+    } else {
+      return res.status(400).json({
+        error: 'mahalle_adi gerekli — bu ilçede birden fazla mahalle var',
+        mevcut: mahalleler.map((f) => f.properties?.text),
+      })
     }
 
-    // 4. Parsel sorgusu
-    const parselUrl = `${TKGM}/parsel-sorgu/${izmir.id}/${ilce.id}/${mahalle.id}/${ada}/${parsel}`
-    const parselData = await axios.get(parselUrl, { headers: tkgmHeaders, timeout: 15000 })
-    const data = parselData.data
+    // 3. Parsel koordinatı
+    const parselResp = await axios.get(
+      `${BASE}/parsel/${mahalleId}/${ada}/${parsel}`,
+      { headers: HEADERS, timeout: 15000 }
+    )
+    const parselData = parselResp.data
 
-    // TKGM yanıt formatı: GeoJSON FeatureCollection veya { features: [...] }
-    let feature = null
-    if (data?.type === 'FeatureCollection' && data.features?.length > 0) {
-      feature = data.features[0]
-    } else if (Array.isArray(data?.features) && data.features.length > 0) {
-      feature = data.features[0]
-    } else if (data?.geometry) {
-      feature = data
+    if (parselData.Message) {
+      return res.status(404).json({ error: parselData.Message })
     }
 
-    if (!feature?.geometry) {
-      return res.status(404).json({ error: 'Parsel geometrisi bulunamadı', raw: data })
+    const coords = parselData.geometry?.coordinates?.[0]
+    if (!coords || coords.length === 0) {
+      return res.status(422).json({ error: 'Koordinat geometrisi boş' })
     }
 
-    const merkez = centroid(feature.geometry)
-    if (!merkez) {
-      return res.status(422).json({ error: 'Koordinat hesaplanamadı', geometry: feature.geometry })
-    }
+    // coords: [[lon, lat], ...] — centroid
+    const lon = coords.reduce((s, p) => s + p[0], 0) / coords.length
+    const lat = coords.reduce((s, p) => s + p[1], 0) / coords.length
 
-    const adres = [
-      feature.properties?.il_adi || 'İZMİR',
-      mahalle.ad,
-      `Ada: ${ada}`,
-      `Parsel: ${parsel}`,
-    ].join(', ')
+    const duzeltme = []
+    if (ilceSonuc.skor > 0) duzeltme.push(`İlçe: "${ilce_adi}" → "${gercekIlce}"`)
+    if (mahalleSkor > 0)    duzeltme.push(`Mahalle: "${mahalle_adi}" → "${gercekMahalle}"`)
 
     return res.json({
-      lat: Math.round(merkez.lat * 1e7) / 1e7,
-      lon: Math.round(merkez.lon * 1e7) / 1e7,
+      lat: Math.round(lat * 1e7) / 1e7,
+      lon: Math.round(lon * 1e7) / 1e7,
       ada,
       parsel,
-      il: izmir.ad,
-      ilce: ilce.ad,
-      mahalle: mahalle.ad,
-      adres,
+      il: 'İZMİR',
+      ilce: gercekIlce,
+      mahalle: gercekMahalle,
+      adres: `İZMİR, ${gercekIlce}, ${gercekMahalle}, Ada: ${ada}, Parsel: ${parsel}`,
+      duzeltme: duzeltme.length > 0 ? duzeltme : null,
     })
   } catch (err) {
     console.error('[TKGM] Hata:', err.message)
     if (err.response?.status === 404) {
-      return res.status(404).json({ error: 'Parsel bulunamadı (TKGM 404)', detail: err.response.data })
+      return res.status(404).json({ error: 'Parsel bulunamadı (TKGM 404)' })
     }
     return res.status(502).json({ error: 'TKGM API hatası: ' + err.message })
   }
