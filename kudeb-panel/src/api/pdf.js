@@ -49,6 +49,24 @@ export async function deleteBelge(belge_id) {
 }
 
 /**
+ * Dosyayı sadece analiz eder, kaydetmez.
+ * Döner: { analiz, eslesen_isler, next_is_no }
+ */
+export async function yaziAnalizEt(file, onProgress) {
+  const form = new FormData()
+  form.append('file', file)
+
+  const res = await axios.post(`${PDF_URL}/upload/analiz`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (e) => {
+      if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100))
+    },
+    timeout: 180000,
+  })
+  return res.data
+}
+
+/**
  * TKGM Parsel Sorgu API'si üzerinden ada/parsel koordinatını bulur.
  * @param {object} job - { ilce_adi, mahalle_adi, ada, parsel }
  * @returns {{ lat, lon, adres, mahalle, ilce }}

@@ -82,6 +82,29 @@ export const getJobFilterOptions = async () => {
   }
 }
 
+export const getNextIsNo = async () => {
+  const year = new Date().getFullYear()
+  const response = await directus.get('/items/kudeb_isler', {
+    params: {
+      filter: JSON.stringify({ is_no: { _starts_with: `${year}-` } }),
+      sort: '-is_no',
+      limit: 1,
+      fields: 'is_no',
+    },
+  })
+  const last = response.data?.data?.[0]?.is_no
+  if (last) {
+    const num = parseInt(last.split('-')[1] || '0')
+    return `${year}-${String(num + 1).padStart(3, '0')}`
+  }
+  return `${year}-001`
+}
+
+export const createJob = async (data) => {
+  const response = await directus.post('/items/kudeb_isler', data)
+  return response.data.data
+}
+
 export const getJobsForMap = async () => {
   const response = await directus.get('/items/kudeb_isler', {
     params: {
