@@ -85,14 +85,8 @@ export const getJobFilterOptions = async () => {
 export const getJobsForMap = async () => {
   const response = await directus.get('/items/kudeb_isler', {
     params: {
-      filter: JSON.stringify({
-        _and: [
-          { koordinat_lat: { _nnull: true } },
-          { koordinat_lon: { _nnull: true } },
-        ],
-      }),
       limit: -1,
-      fields: 'id,is_no,ilce_adi,mahalle_adi,ada,parsel,is_turu_adi,gorevli_personel,vade_tarihi,son_durum,koordinat_lat,koordinat_lon',
+      fields: '*',
     },
   })
   return response.data.data
