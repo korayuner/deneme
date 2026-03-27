@@ -38,7 +38,7 @@ export const getJobs = async (params = {}) => {
   const response = await directus.get('/items/kudeb_isler', {
     params: {
       ...(Object.keys(filter).length > 0 && { filter: JSON.stringify(filter) }),
-      sort: '-date_created',
+      sort: '-id',
       limit,
       page,
       fields: 'id,is_no,ilce_adi,mahalle_adi,ada,parsel,is_turu_adi,gorevli_personel,vade_tarihi,son_durum',
