@@ -1,6 +1,7 @@
 import express from 'express'
 import uploadRouter from './routes/upload.js'
 import photosRouter from './routes/photos.js'
+import tkgmRouter from './routes/tkgm.js'
 
 const app = express()
 const PORT = process.env.PORT || 4000
@@ -18,6 +19,7 @@ app.use((req, res, next) => {
 
 app.use('/upload', uploadRouter)
 app.use('/photos', photosRouter)
+app.use('/tkgm', tkgmRouter)
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
 

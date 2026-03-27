@@ -47,3 +47,19 @@ export async function getBelgelerByIsNo(is_no) {
 export async function deleteBelge(belge_id) {
   await axios.delete(`${PDF_URL}/upload/belgeler/${belge_id}`)
 }
+
+/**
+ * TKGM Parsel Sorgu API'si üzerinden ada/parsel koordinatını bulur.
+ * @param {object} job - { ilce_adi, mahalle_adi, ada, parsel }
+ * @returns {{ lat, lon, adres, mahalle, ilce }}
+ */
+export async function tkgmKoordinatBul({ ilce_adi, mahalle_adi, ada, parsel }) {
+  const params = new URLSearchParams()
+  if (ilce_adi)    params.append('ilce_adi', ilce_adi)
+  if (mahalle_adi) params.append('mahalle_adi', mahalle_adi)
+  if (ada)         params.append('ada', ada)
+  if (parsel)      params.append('parsel', parsel)
+
+  const res = await axios.get(`${PDF_URL}/tkgm/parsel-koordinat?${params}`, { timeout: 30000 })
+  return res.data
+}
