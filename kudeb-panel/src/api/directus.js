@@ -16,7 +16,7 @@ export const getJobs = async (params = {}) => {
   const filter = {}
 
   if (ilce) filter.ilce_adi = { _eq: ilce }
-  if (is_turu) filter.is_turu_adi = { _eq: is_turu }
+  if (is_turu) filter.is_turu_adi = { _icontains: is_turu }
   if (search) {
     filter._or = [
       { is_no: { _icontains: search } },

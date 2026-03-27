@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, UserPlus, Trash2, Settings, Users, Loader2 } from 'lucide-react'
-import { usePersoneller, useAddPersonel, useDeletePersonel } from '../../hooks/usePersonel'
+import { X, UserPlus, Trash2, Settings, Users, Briefcase, Plus, Loader2 } from 'lucide-react'
+import { usePersoneller, useAddPersonel, useDeletePersonel, useIsTurleri, useAddIsTuru, useDeleteIsTuru } from '../../hooks/usePersonel'
 
 function PersonelListesi() {
   const { data: personeller = [], isLoading } = usePersoneller()
@@ -74,8 +74,81 @@ function PersonelListesi() {
   )
 }
 
+function IsTurleriListesi() {
+  const { data: turler = [], isLoading } = useIsTurleri()
+  const { mutate: ekle, isPending: ekleniyor } = useAddIsTuru()
+  const { mutate: sil } = useDeleteIsTuru()
+  const [yeniAd, setYeniAd] = useState('')
+
+  const handleEkle = (e) => {
+    e.preventDefault()
+    const ad = yeniAd.trim()
+    if (!ad) return
+    ekle(ad, { onSuccess: () => setYeniAd('') })
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 size={20} className="animate-spin text-gray-400" />
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <p className="text-xs text-gray-400 mb-4">
+        Bir iş birden fazla tür içerebilir. Türler iş detayında çoklu seçim ile atanır.
+      </p>
+
+      <form onSubmit={handleEkle} className="flex gap-2 mb-4">
+        <input
+          type="text"
+          value={yeniAd}
+          onChange={(e) => setYeniAd(e.target.value)}
+          placeholder="İş türü adı"
+          className="flex-1 text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          type="submit"
+          disabled={!yeniAd.trim() || ekleniyor}
+          className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
+        >
+          {ekleniyor ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+          Ekle
+        </button>
+      </form>
+
+      {turler.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-8">Henüz iş türü eklenmemiş</p>
+      ) : (
+        <ul className="space-y-1">
+          {turler.map((t) => (
+            <li
+              key={t.id}
+              className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 group transition-colors"
+            >
+              <span className="text-sm text-gray-800 dark:text-gray-200">{t.ad}</span>
+              <button
+                onClick={() => sil(t.id)}
+                className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all rounded"
+                title="Sil"
+              >
+                <Trash2 size={14} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p className="mt-4 text-xs text-gray-400 text-right">{turler.length} tür</p>
+    </div>
+  )
+}
+
 const TABS = [
   { id: 'personel', label: 'Görevli Kişiler', icon: Users },
+  { id: 'is_turleri', label: 'İş Türleri', icon: Briefcase },
 ]
 
 export default function SettingsModal({ onClose }) {
@@ -136,6 +209,7 @@ export default function SettingsModal({ onClose }) {
         {/* İçerik */}
         <div className="flex-1 overflow-y-auto p-5">
           {aktifTab === 'personel' && <PersonelListesi />}
+          {aktifTab === 'is_turleri' && <IsTurleriListesi />}
         </div>
       </div>
     </>

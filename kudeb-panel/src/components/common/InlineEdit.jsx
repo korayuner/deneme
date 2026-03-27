@@ -161,6 +161,90 @@ export function InlineEditSelect({ value, onSave, options = [], placeholder = 'S
   )
 }
 
+// Çoklu seçim (is_turu gibi virgülle ayrılmış değerler için)
+export function InlineEditMultiSelect({ value, onSave, options = [], placeholder = 'Seçilmedi' }) {
+  const [editing, setEditing] = useState(false)
+  const containerRef = useRef(null)
+
+  // Mevcut değerleri dizi olarak parse et
+  const secili = value ? value.split(',').map((s) => s.trim()).filter(Boolean) : []
+
+  const toggle = (opt) => {
+    const yeni = secili.includes(opt)
+      ? secili.filter((s) => s !== opt)
+      : [...secili, opt]
+    onSave(yeni.join(', '))
+  }
+
+  // Dışarı tıklayınca kapat
+  useEffect(() => {
+    if (!editing) return
+    const handler = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setEditing(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [editing])
+
+  if (editing) {
+    return (
+      <div ref={containerRef} className="relative z-20">
+        <div className="border border-blue-400 rounded-lg bg-white dark:bg-gray-800 shadow-lg min-w-[220px]">
+          {options.map((opt) => {
+            const aktif = secili.includes(opt)
+            return (
+              <label
+                key={opt}
+                className={clsx(
+                  'flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors first:rounded-t-lg last:rounded-b-lg',
+                  aktif && 'bg-blue-50 dark:bg-blue-900/20'
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={aktif}
+                  onChange={() => toggle(opt)}
+                  className="rounded accent-blue-600"
+                />
+                <span className="text-sm text-gray-800 dark:text-gray-200">{opt}</span>
+              </label>
+            )
+          })}
+          <div className="border-t border-gray-100 dark:border-gray-700 px-3 py-2 flex justify-end">
+            <button
+              onClick={() => setEditing(false)}
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+            >
+              Tamam
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <span
+      onClick={() => setEditing(true)}
+      className="group flex flex-wrap items-center gap-1 cursor-pointer rounded px-1 -mx-1 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors min-h-[24px]"
+      title="Düzenlemek için tıklayın"
+    >
+      {secili.length === 0 ? (
+        <span className="text-gray-400 italic text-sm">{placeholder}</span>
+      ) : (
+        secili.map((s) => (
+          <span key={s} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300">
+            {s}
+          </span>
+        ))
+      )}
+      <Pencil size={12} className="opacity-0 group-hover:opacity-40 flex-shrink-0 ml-0.5" />
+    </span>
+  )
+}
+
 export function InlineEditDate({ value, onSave, className = '' }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value ? value.split('T')[0] : '')

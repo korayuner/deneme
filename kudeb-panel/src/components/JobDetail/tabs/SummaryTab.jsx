@@ -1,7 +1,7 @@
 import { ExternalLink } from 'lucide-react'
-import { InlineEditText, InlineEditDate, InlineEditSelect } from '../../common/InlineEdit'
+import { InlineEditText, InlineEditDate, InlineEditSelect, InlineEditMultiSelect } from '../../common/InlineEdit'
 import { useUpdateJob } from '../../../hooks/useJobs'
-import { usePersoneller } from '../../../hooks/usePersonel'
+import { usePersoneller, useIsTurleri } from '../../../hooks/usePersonel'
 import { formatDate, getVadeDurumu } from '../../../utils/date'
 import Badge from '../../common/Badge'
 import clsx from 'clsx'
@@ -19,6 +19,8 @@ export default function SummaryTab({ job }) {
   const { mutate: updateJob } = useUpdateJob()
   const { data: personeller = [] } = usePersoneller()
   const personelAdlari = personeller.map((p) => p.ad)
+  const { data: isTurleri = [] } = useIsTurleri()
+  const isTuruAdlari = isTurleri.map((t) => t.ad)
 
   const update = (field) => (value) => {
     updateJob({ id: job.id, data: { [field]: value } })
@@ -47,7 +49,14 @@ export default function SummaryTab({ job }) {
           <Field label="Mahalle">{job.mahalle_adi || '-'}</Field>
           <Field label="Ada">{job.ada || '-'}</Field>
           <Field label="Parsel">{job.parsel || '-'}</Field>
-          <Field label="İş Türü">{job.is_turu_adi || '-'}</Field>
+          <Field label="İş Türü">
+            <InlineEditMultiSelect
+              value={job.is_turu_adi}
+              onSave={update('is_turu_adi')}
+              options={isTuruAdlari}
+              placeholder="Tür seçilmedi"
+            />
+          </Field>
         </dl>
       </section>
 
