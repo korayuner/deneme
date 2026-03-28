@@ -98,14 +98,12 @@ echo "→ Veritabanı koleksiyonları kuruluyor..."
 DIRECTUS_URL=http://localhost:8055 bash scripts/kurulum.sh
 
 # ── Sonuç ─────────────────────────────────────────────────────────────────────
-IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
-
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║                                                      ║"
 echo "║    ✓  KUDEB Panel HAZIR!                             ║"
 echo "║                                                      ║"
-printf "║    Uygulama:  http://%-32s║\n" "$IP:3001"
+echo "║    Uygulama:  http://localhost:3001                  ║"
 echo "║    Directus:  http://localhost:8055                  ║"
 echo "║    Paperless: http://localhost:8001                  ║"
 echo "║                                                      ║"
