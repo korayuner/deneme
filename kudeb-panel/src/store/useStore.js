@@ -4,15 +4,12 @@ import { persist } from 'zustand/middleware'
 const useStore = create(
   persist(
     (set) => ({
-      // Selected job
       selectedJobId: null,
       setSelectedJobId: (id) => set({ selectedJobId: id }),
 
-      // Active tab in detail panel
       activeTab: 'ozet',
       setActiveTab: (tab) => set({ activeTab: tab }),
 
-      // Search & filter
       searchQuery: '',
       setSearchQuery: (q) => set({ searchQuery: q }),
 
@@ -25,17 +22,31 @@ const useStore = create(
       filterVade: '',
       setFilterVade: (v) => set({ filterVade: v }),
 
-      // View mode: 'list' | 'map'
+      filterAsama: '',
+      setFilterAsama: (v) => set({ filterAsama: v }),
+
+      // Genişletilmiş ana iş ID'leri (sidebar'da alt işleri göstermek için)
+      expandedParents: [],
+      toggleParentExpand: (id) =>
+        set((s) => ({
+          expandedParents: s.expandedParents.includes(id)
+            ? s.expandedParents.filter((x) => x !== id)
+            : [...s.expandedParents, id],
+        })),
+
       viewMode: 'list',
       setViewMode: (mode) => set({ viewMode: mode }),
 
-      // Theme
       darkMode: false,
       toggleDarkMode: () => set((s) => ({ darkMode: !s.darkMode })),
     }),
     {
       name: 'kudeb-panel-store',
-      partialize: (state) => ({ darkMode: state.darkMode, viewMode: state.viewMode }),
+      partialize: (state) => ({
+        darkMode: state.darkMode,
+        viewMode: state.viewMode,
+        expandedParents: state.expandedParents,
+      }),
     },
   ),
 )

@@ -1,21 +1,33 @@
 import { Suspense, lazy } from 'react'
-import { FileText, Map, Image, AlignLeft, ChevronRight } from 'lucide-react'
+import { AlignLeft, CheckSquare, FileText, GitBranch, Shovel, Clock, Map, ChevronRight } from 'lucide-react'
 import clsx from 'clsx'
 import useStore from '../../store/useStore'
 import { useJob } from '../../hooks/useJobs'
 import LoadingSpinner from '../common/LoadingSpinner'
 import SummaryTab from './tabs/SummaryTab'
-import DocumentsTab from './tabs/DocumentsTab'
-import PhotosTab from './tabs/PhotosTab'
+import AsamaTab from './tabs/AsamaTab'
+import YazismalarTab from './tabs/YazismalarTab'
+import AltIslerTab from './tabs/AltIslerTab'
+import AraziTab from './tabs/AraziTab'
+import GecmisTab from './tabs/GecmisTab'
 
 const MapTab = lazy(() => import('./tabs/MapTab'))
 
-const TABS = [
-  { id: 'ozet', label: 'Özet', icon: AlignLeft },
-  { id: 'belgeler', label: 'Belgeler', icon: FileText },
-  { id: 'harita', label: 'Harita', icon: Map },
-  { id: 'fotograflar', label: 'Fotoğraf', icon: Image },
-]
+// Tab tanımları — alt işi olan ana işte AltIsler sekmesi gösterilir
+function getTabs(job) {
+  const tabs = [
+    { id: 'ozet', label: 'Özet', icon: AlignLeft },
+  ]
+  if (job?.parent_id === null && (job?._altIs_sayisi > 0)) {
+    tabs.push({ id: 'altisler', label: 'Alt İşler', icon: GitBranch })
+  }
+  tabs.push({ id: 'asamalar', label: 'Aşamalar', icon: CheckSquare })
+  tabs.push({ id: 'yazismalar', label: 'Yazışmalar', icon: FileText })
+  tabs.push({ id: 'arazi', label: 'Arazi', icon: Shovel })
+  tabs.push({ id: 'harita', label: 'Harita', icon: Map })
+  tabs.push({ id: 'gecmis', label: 'Geçmiş', icon: Clock })
+  return tabs
+}
 
 function TabButton({ tab, isActive, onClick }) {
   const Icon = tab.icon
@@ -60,6 +72,14 @@ export default function JobDetail() {
     )
   }
 
+  const tabs = getTabs(job)
+  // Eğer aktif sekme bu iş için yoksa özete dön
+  const gecerliTab = tabs.find((t) => t.id === activeTab) ? activeTab : 'ozet'
+
+  const pct = job.asama_toplam > 0
+    ? Math.round((job.asama_tamamlanan / job.asama_toplam) * 100)
+    : null
+
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-gray-800">
       {/* Job header */}
@@ -73,7 +93,19 @@ export default function JobDetail() {
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
               {job.is_turu_adi || 'İş türü belirtilmedi'}
+              {job.parent_id && <span className="ml-2 text-xs px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded">Alt İş</span>}
             </p>
+            {pct !== null && (
+              <div className="flex items-center gap-2 mt-1.5">
+                <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full max-w-[160px] overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-green-500' : 'bg-blue-500'}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <span className="text-xs text-gray-400">{job.asama_tamamlanan}/{job.asama_toplam} aşama</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -81,11 +113,11 @@ export default function JobDetail() {
       {/* Tabs */}
       <div className="border-b border-gray-200 dark:border-gray-700 flex-shrink-0 overflow-x-auto">
         <div className="flex">
-          {TABS.map((tab) => (
+          {tabs.map((tab) => (
             <TabButton
               key={tab.id}
               tab={tab}
-              isActive={activeTab === tab.id}
+              isActive={gecerliTab === tab.id}
               onClick={() => setActiveTab(tab.id)}
             />
           ))}
@@ -94,14 +126,17 @@ export default function JobDetail() {
 
       {/* Tab content */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {activeTab === 'ozet' && <SummaryTab job={job} />}
-        {activeTab === 'belgeler' && <DocumentsTab job={job} />}
-        {activeTab === 'harita' && (
+        {gecerliTab === 'ozet' && <SummaryTab job={job} />}
+        {gecerliTab === 'altisler' && <AltIslerTab job={job} />}
+        {gecerliTab === 'asamalar' && <AsamaTab job={job} />}
+        {gecerliTab === 'yazismalar' && <YazismalarTab job={job} />}
+        {gecerliTab === 'arazi' && <AraziTab job={job} />}
+        {gecerliTab === 'harita' && (
           <Suspense fallback={<LoadingSpinner className="mt-12" />}>
             <MapTab job={job} />
           </Suspense>
         )}
-        {activeTab === 'fotograflar' && <PhotosTab job={job} />}
+        {gecerliTab === 'gecmis' && <GecmisTab job={job} />}
       </div>
     </div>
   )

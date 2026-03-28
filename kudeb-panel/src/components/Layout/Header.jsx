@@ -1,11 +1,17 @@
 import { useState } from 'react'
-import { Moon, Sun, Building2, Map, List, Settings } from 'lucide-react'
+import { Moon, Sun, Building2, Map, List, Settings, Bell } from 'lucide-react'
 import useStore from '../../store/useStore'
 import SettingsModal from '../Settings/SettingsModal'
+import { useBekleyenBelgeler } from '../../hooks/useBelgeler'
+import BekleyenYazismalar from '../JobList/BekleyenYazismalar'
 
 export default function Header() {
   const { darkMode, toggleDarkMode, viewMode, setViewMode } = useStore()
   const [settingsAcik, setSettingsAcik] = useState(false)
+  const [bekleyenAcik, setBekleyenAcik] = useState(false)
+
+  const { data: bekleyenler = [] } = useBekleyenBelgeler()
+  const bekleyenSayi = bekleyenler.length
 
   return (
     <>
@@ -20,6 +26,20 @@ export default function Header() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Bekleyen yazışmalar butonu */}
+          <button
+            onClick={() => setBekleyenAcik(true)}
+            className="relative p-2 rounded-lg text-gray-500 hover:text-amber-600 hover:bg-amber-50 dark:text-gray-400 dark:hover:text-amber-400 dark:hover:bg-amber-900/20 transition-colors"
+            title="Bekleyen yazışmalar"
+          >
+            <Bell size={18} />
+            {bekleyenSayi > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-amber-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                {bekleyenSayi > 99 ? '99+' : bekleyenSayi}
+              </span>
+            )}
+          </button>
+
           {/* List / Map toggle */}
           <div className="flex items-center rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
             <button
@@ -69,6 +89,7 @@ export default function Header() {
       </header>
 
       {settingsAcik && <SettingsModal onClose={() => setSettingsAcik(false)} />}
+      {bekleyenAcik && <BekleyenYazismalar onClose={() => setBekleyenAcik(false)} />}
     </>
   )
 }

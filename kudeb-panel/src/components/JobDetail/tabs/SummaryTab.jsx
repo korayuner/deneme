@@ -45,10 +45,24 @@ export default function SummaryTab({ job }) {
           <Field label="İş No">
             <span className="font-mono font-semibold">{job.is_no || '-'}</span>
           </Field>
-          <Field label="İlçe">{job.ilce_adi || '-'}</Field>
-          <Field label="Mahalle">{job.mahalle_adi || '-'}</Field>
-          <Field label="Ada">{job.ada || '-'}</Field>
-          <Field label="Parsel">{job.parsel || '-'}</Field>
+          <Field label="İlçe">
+            <InlineEditText value={job.ilce_adi} onSave={update('ilce_adi')} placeholder="-" />
+          </Field>
+          <Field label="Mahalle">
+            <InlineEditText value={job.mahalle_adi} onSave={update('mahalle_adi')} placeholder="-" />
+          </Field>
+          <Field label="Ada">
+            <InlineEditText value={job.ada} onSave={update('ada')} placeholder="-" />
+          </Field>
+          <Field label="Parsel">
+            <InlineEditText value={job.parsel} onSave={update('parsel')} placeholder="-" />
+          </Field>
+          <Field label="Eski Ada">
+            <InlineEditText value={job.eski_ada} onSave={update('eski_ada')} placeholder="-" />
+          </Field>
+          <Field label="Eski Parsel">
+            <InlineEditText value={job.eski_parsel} onSave={update('eski_parsel')} placeholder="-" />
+          </Field>
           <Field label="İş Türü">
             <InlineEditMultiSelect
               value={job.is_turu_adi}

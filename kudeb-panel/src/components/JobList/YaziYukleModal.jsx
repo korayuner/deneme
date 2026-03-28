@@ -5,7 +5,7 @@ import {
   MapPin, Building2, Plus, ArrowRight, Search,
 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
-import { yaziAnalizEt, uploadAndAnalyze } from '../../api/pdf'
+import { yaziAnalizEt, uploadYazi } from '../../api/pdf'
 import { createJob } from '../../api/directus'
 import useStore from '../../store/useStore'
 
@@ -95,7 +95,7 @@ export default function YaziYukleModal({ onClose }) {
 
       // Dosyayı Directus + Paperless'a yükle
       const ozet = seciliIs ? (seciliIs.son_durum || '') : ''
-      await uploadAndAnalyze(dosya, is_no, is_id, ozet, null)
+      await uploadYazi(dosya, is_no, is_id, ozet, null)
 
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
       queryClient.invalidateQueries({ queryKey: ['belgeler', is_no] })

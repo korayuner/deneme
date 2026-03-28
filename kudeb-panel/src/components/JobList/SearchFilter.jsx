@@ -8,16 +8,18 @@ export default function SearchFilter() {
     filterIlce, setFilterIlce,
     filterTur, setFilterTur,
     filterVade, setFilterVade,
+    filterAsama, setFilterAsama,
   } = useStore()
   const { data: options } = useJobFilterOptions()
 
-  const hasFilters = filterIlce || filterTur || filterVade
+  const hasFilters = filterIlce || filterTur || filterVade || filterAsama
 
   const clearAll = () => {
     setSearchQuery('')
     setFilterIlce('')
     setFilterTur('')
     setFilterVade('')
+    setFilterAsama('')
   }
 
   return (
@@ -61,6 +63,16 @@ export default function SearchFilter() {
             { value: 'yaklasan', label: 'Bu hafta vadeli' },
           ]}
           placeholder="Tüm vadeler"
+        />
+        <Select
+          value={filterAsama}
+          onChange={setFilterAsama}
+          options={[
+            { value: 'tamamlandi', label: 'Aşamalar tamamlandı' },
+            { value: 'devam', label: 'Aşamalar devam ediyor' },
+            { value: 'baslanmadi', label: 'Aşama başlanmadı' },
+          ]}
+          placeholder="Tüm aşamalar"
         />
       </div>
 
