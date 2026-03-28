@@ -1,32 +1,40 @@
 import { readFile } from 'fs/promises'
 
+// Tarama PDF eşiği: bu kadardan az karakter varsa PDF görüntü tabanlıdır
+const TARAMA_ESIGI = 100
+
 /**
  * PDF veya Word dosyasından metin çıkarır.
- * PDF  → pdf-parse
+ * PDF  → pdf-parse (gömülü metin)
  * DOCX → mammoth
  *
  * @param {string} filePath  Geçici dosya yolu
  * @param {string} mimeType  MIME türü
- * @returns {{ metin: string, sayfa_sayisi: number }}
+ * @returns {{ metin: string, sayfa_sayisi: number, tarama: boolean }}
+ *   tarama=true ise PDF görüntü tabanlıdır → Gemini Vision kullanılmalı
  */
 export async function extractText(filePath, mimeType) {
   if (
     mimeType === 'application/pdf' ||
     filePath.toLowerCase().endsWith('.pdf')
   ) {
-    return extractPdf(filePath)
+    const { metin, sayfa_sayisi } = await extractPdf(filePath)
+    const tarama = metin.trim().length < TARAMA_ESIGI
+    if (tarama) console.log(`[OCR] Tarama PDF tespit edildi (${metin.length} karakter) — Gemini Vision devreye girecek`)
+    return { metin, sayfa_sayisi, tarama }
   }
 
   if (
     mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
     filePath.toLowerCase().endsWith('.docx')
   ) {
-    return extractDocx(filePath)
+    const { metin, sayfa_sayisi } = await extractDocx(filePath)
+    return { metin, sayfa_sayisi, tarama: false }
   }
 
   // Diğer dosyalar (txt, csv vb.) — düz metin olarak oku
   const metin = await readFile(filePath, 'utf-8').catch(() => '')
-  return { metin: metin.trim(), sayfa_sayisi: 1 }
+  return { metin: metin.trim(), sayfa_sayisi: 1, tarama: false }
 }
 
 async function extractPdf(filePath) {

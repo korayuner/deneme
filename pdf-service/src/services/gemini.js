@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { readFile } from 'fs/promises'
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
@@ -54,7 +55,7 @@ async function getApiSlots() {
 }
 
 /**
- * Gemini API'ye istek atar. Birden fazla anahtar varsa sırayla dener.
+ * Gemini API'ye istek atar (metin tabanlı). Birden fazla anahtar varsa sırayla dener.
  */
 export async function callGemini(prompt) {
   const ayarlar = await getAyarlar()
@@ -81,6 +82,64 @@ export async function callGemini(prompt) {
     }
   }
   throw new Error(`Hiçbir Gemini modeli yanıt vermedi. Son hata: ${lastError}`)
+}
+
+/**
+ * Tarama PDF'i Gemini Vision ile analiz eder.
+ * Dosya base64 olarak inline_data şeklinde gönderilir — metin çıkarmaya gerek yok.
+ * Gemini 2.5 Flash, application/pdf'i doğrudan okuyabiliyor.
+ *
+ * @param {string} filePath  Geçici dosya yolu
+ * @param {string} mimeType  'application/pdf'
+ * @param {string} mevcutOzet  Mevcut iş özeti (harmanlama için)
+ */
+export async function analyzeFileWithGemini(filePath, mimeType = 'application/pdf', mevcutOzet = '') {
+  const ayarlar = await getAyarlar()
+  const temperature = parseFloat(ayarlar.gemini_temperature || '0.2')
+  const slots = await getApiSlots()
+
+  if (slots.length === 0) throw new Error('Gemini API anahtarı tanımlı değil.')
+
+  const harmanlamaTalimati = mevcutOzet
+    ? `BAĞLAM (İŞİN GEÇMİŞİ): "${mevcutOzet}"\n\nBu geçmiş ile ekteki yeni belgeyi harmanlayarak bütünleşik bir ÖZET yaz.`
+    : `Belgenin konusunu, talebini ve sonucunu teknik bir dille özetle.`
+
+  // Prompt: BELGE_METNI yerine "ekteki belgeyi oku" talimatı
+  const promptSablon = ayarlar.gemini_prompt || VARSAYILAN_PROMPT
+  const prompt = promptSablon
+    .replace('{BELGE_METNI}', 'NOT: Bu belge tarama (görüntü) PDF\'dir. Belge içeriğini doğrudan dosyadan oku ve analiz et.')
+    .replace('{HARMANLAMA_TALIMATI}', harmanlamaTalimati)
+
+  // PDF'i base64'e çevir (max 20MB inline_data limiti)
+  const fileBuffer = await readFile(filePath)
+  const base64Data = fileBuffer.toString('base64')
+
+  const payload = {
+    contents: [{
+      parts: [
+        { inlineData: { mimeType, data: base64Data } },
+        { text: prompt },
+      ],
+    }],
+    generationConfig: { temperature, maxOutputTokens: 8192 },
+  }
+
+  let lastError = ''
+  for (const { key, model } of slots) {
+    try {
+      const url = `${GEMINI_BASE}/${model}:generateContent?key=${key}`
+      const res = await axios.post(url, payload, { timeout: 120000 })
+      const text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      if (text) {
+        console.log(`[OCR] Gemini Vision analizi tamamlandı (${model})`)
+        return parseResponse(text)
+      }
+    } catch (err) {
+      lastError = `${model}: ${err.response?.status || err.message}`
+      console.warn(`Gemini Vision slot başarısız (${model}):`, lastError)
+    }
+  }
+  throw new Error(`Gemini Vision hiçbir modelde çalışmadı. Son hata: ${lastError}`)
 }
 
 /**

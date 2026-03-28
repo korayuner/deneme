@@ -3,7 +3,7 @@ import multer from 'multer'
 import { unlink } from 'fs/promises'
 import axios from 'axios'
 import { extractText } from '../services/extractor.js'
-import { analyzeWithGemini } from '../services/gemini.js'
+import { analyzeWithGemini, analyzeFileWithGemini } from '../services/gemini.js'
 import { saveToDirectus, saveToPaperless, deleteBelge, getBelgelerByIsNo } from '../services/storage.js'
 
 const router = express.Router()
@@ -145,8 +145,10 @@ router.post('/analiz', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Dosya bulunamadı.' })
 
-    const { metin } = await extractText(tmpPath, req.file.mimetype)
-    const analiz = await analyzeWithGemini(metin, '')
+    const { metin, tarama } = await extractText(tmpPath, req.file.mimetype)
+    const analiz = tarama
+      ? await analyzeFileWithGemini(tmpPath, req.file.mimetype, '')
+      : await analyzeWithGemini(metin, '')
 
     const [eslesen_isler, next_is_no] = await Promise.all([
       findMatchingJobs(analiz),
@@ -179,10 +181,12 @@ router.post('/', upload.single('file'), async (req, res) => {
     if (!is_no)    return res.status(400).json({ error: 'is_no zorunlu.' })
 
     // 1. Metin çıkar
-    const { metin, sayfa_sayisi } = await extractText(tmpPath, req.file.mimetype)
+    const { metin, sayfa_sayisi, tarama } = await extractText(tmpPath, req.file.mimetype)
 
-    // 2. Gemini analizi
-    const analiz = await analyzeWithGemini(metin, mevcut_ozet)
+    // 2. Gemini analizi — tarama PDF ise dosyayı doğrudan Vision API'ye gönder
+    const analiz = tarama
+      ? await analyzeFileWithGemini(tmpPath, req.file.mimetype, mevcut_ozet)
+      : await analyzeWithGemini(metin, mevcut_ozet)
 
     // 3. Eşleşen iş ve uyarı
     let isIds = []
