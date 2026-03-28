@@ -1,11 +1,10 @@
 import express from 'express'
 import multer from 'multer'
-import { randomUUID } from 'crypto'
 import { unlink } from 'fs/promises'
 import axios from 'axios'
 import { extractText } from '../services/extractor.js'
 import { analyzeWithGemini } from '../services/gemini.js'
-import { saveToDirectus, saveToPaperless } from '../services/storage.js'
+import { saveToDirectus, saveToPaperless, deleteBelge, getBelgelerByIsNo } from '../services/storage.js'
 
 const router = express.Router()
 
@@ -14,30 +13,83 @@ const directusClient = axios.create({
   headers: { Authorization: `Bearer ${process.env.DIRECTUS_TOKEN}` },
 })
 
-async function findMatchingJobs(analiz) {
-  try {
-    let filter = {}
-    if (analiz.ada && analiz.parsel) {
-      filter._and = [
-        { ada: { _eq: analiz.ada } },
-        { parsel: { _eq: analiz.parsel } },
-      ]
-    } else if (analiz.mahalle) {
-      filter = { mahalle_adi: { _icontains: analiz.mahalle } }
-      if (analiz.ilce) filter.ilce_adi = { _icontains: analiz.ilce }
-    } else {
-      return []
+// ─── Yardımcı: Levenshtein mesafesi (fuzzy match) ────────────────────────────
+
+function levenshtein(a, b) {
+  const m = a.length, n = b.length
+  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)])
+  for (let j = 0; j <= n; j++) dp[0][j] = j
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
     }
+  }
+  return dp[m][n]
+}
+
+// ─── Yardımcı: İşleri bul (tam + fuzzy) ─────────────────────────────────────
+
+async function findMatchingJobs(analiz) {
+  if (!analiz.ada && !analiz.parsel && !analiz.mahalle) return []
+
+  const tolerans = 2 // Levenshtein toleransı
+
+  try {
+    // Geniş havuz: ilçe veya mahalle bazlı
+    const filter = {}
+    if (analiz.ilce) filter.ilce_adi = { _icontains: analiz.ilce }
+    else if (analiz.mahalle) filter.mahalle_adi = { _icontains: analiz.mahalle }
+
     const res = await directusClient.get('/items/kudeb_isler', {
       params: {
-        filter: JSON.stringify(filter),
-        limit: 5,
+        filter: Object.keys(filter).length ? JSON.stringify(filter) : undefined,
+        limit: 100,
         sort: '-id',
-        fields: 'id,is_no,ilce_adi,mahalle_adi,ada,parsel,gorevli_personel,son_durum,is_turu_adi',
+        fields: 'id,is_no,ilce_adi,mahalle_adi,ada,parsel,eski_ada,eski_parsel,gorevli_personel,son_durum,is_turu_adi',
       },
     })
-    return res.data?.data || []
-  } catch {
+    const havuz = res.data?.data || []
+
+    const sonuclar = []
+
+    for (const is of havuz) {
+      // Tam eşleşme
+      const tamAda    = analiz.ada    && is.ada    === analiz.ada
+      const tamParsel = analiz.parsel && is.parsel === analiz.parsel
+      const tamEskiAda    = analiz.ada    && is.eski_ada    === analiz.ada
+      const tamEskiParsel = analiz.parsel && is.eski_parsel === analiz.parsel
+
+      if (tamAda && tamParsel) {
+        sonuclar.push({ ...is, eslesme: 'tam', uyari: null, skor: 0 })
+        continue
+      }
+      if ((tamEskiAda && tamParsel) || (tamAda && tamEskiParsel)) {
+        sonuclar.push({ ...is, eslesme: 'eski_tapu', uyari: 'Eski tapu numarasıyla eşleşti', skor: 1 })
+        continue
+      }
+
+      // Fuzzy eşleşme (OCR hatası toleransı)
+      if (analiz.ada && is.ada) {
+        const dist = levenshtein(String(analiz.ada), String(is.ada))
+        if (dist <= tolerans && dist > 0) {
+          const uyari = `Ada yazım hatası olabilir: belgede "${analiz.ada}", kayıtta "${is.ada}"`
+          const parselEsles = !analiz.parsel || is.parsel === analiz.parsel
+          if (parselEsles) {
+            sonuclar.push({ ...is, eslesme: 'fuzzy', uyari, skor: dist })
+            continue
+          }
+        }
+      }
+    }
+
+    // Skor'a göre sırala, max 5 sonuç
+    sonuclar.sort((a, b) => a.skor - b.skor)
+    return sonuclar.slice(0, 5)
+
+  } catch (err) {
+    console.warn('findMatchingJobs hatası:', err.message)
     return []
   }
 }
@@ -47,7 +99,13 @@ async function getNextIsNo() {
     const year = new Date().getFullYear()
     const res = await directusClient.get('/items/kudeb_isler', {
       params: {
-        filter: JSON.stringify({ is_no: { _starts_with: `${year}-` } }),
+        filter: JSON.stringify({
+          _and: [
+            { is_no: { _starts_with: `${year}-` } },
+            { parent_id: { _null: true } },
+            { is_no: { _ncontains: '-A' } },
+          ],
+        }),
         sort: '-is_no',
         limit: 1,
         fields: 'is_no',
@@ -55,7 +113,8 @@ async function getNextIsNo() {
     })
     const last = res.data?.data?.[0]?.is_no
     if (last) {
-      const num = parseInt(last.split('-')[1] || '0')
+      const parts = last.split('-')
+      const num = parseInt(parts[1] || '0')
       return `${year}-${String(num + 1).padStart(3, '0')}`
     }
     return `${year}-001`
@@ -64,22 +123,23 @@ async function getNextIsNo() {
   }
 }
 
-// Geçici dosyaları /tmp'ye yaz, max 50MB
+// ─── Multer ─────────────────────────────────────────────────────────────────
+
 const upload = multer({
   dest: '/tmp/',
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const allowed = ['application/pdf', 'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+    const allowed = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ]
     cb(null, allowed.includes(file.mimetype))
   },
 })
 
-/**
- * POST /upload/analiz
- * Sadece analiz eder, Directus/Paperless'a kaydetmez.
- * Döner: { analiz, eslesen_isler, next_is_no }
- */
+// ─── POST /analiz — Sadece analiz ───────────────────────────────────────────
+
 router.post('/analiz', upload.single('file'), async (req, res) => {
   const tmpPath = req.file?.path
   try {
@@ -87,6 +147,7 @@ router.post('/analiz', upload.single('file'), async (req, res) => {
 
     const { metin } = await extractText(tmpPath, req.file.mimetype)
     const analiz = await analyzeWithGemini(metin, '')
+
     const [eslesen_isler, next_is_no] = await Promise.all([
       findMatchingJobs(analiz),
       getNextIsNo(),
@@ -94,6 +155,7 @@ router.post('/analiz', upload.single('file'), async (req, res) => {
 
     await unlink(tmpPath).catch(() => {})
     res.json({ analiz, eslesen_isler, next_is_no })
+
   } catch (err) {
     console.error('Analiz hatası:', err)
     if (tmpPath) await unlink(tmpPath).catch(() => {})
@@ -101,17 +163,15 @@ router.post('/analiz', upload.single('file'), async (req, res) => {
   }
 })
 
-/**
- * POST /upload
- * Body (multipart/form-data):
- *   file    — PDF veya Word dosyası
- *   is_no   — "2025-001"  (zorunlu)
- *   is_id   — Directus job UUID (opsiyonel, özet güncellemek için)
- *   mevcut_ozet — mevcut iş özeti (harmanlama için Gemini'ye gönderilir)
- */
+// ─── POST / — Analiz + Kaydet ────────────────────────────────────────────────
+// Body (multipart/form-data):
+//   file          — PDF / Word / TXT
+//   is_no         — "2026-031"  (zorunlu)
+//   is_id         — Directus iş ID (opsiyonel)
+//   mevcut_ozet   — mevcut iş özeti (harmanlama)
+
 router.post('/', upload.single('file'), async (req, res) => {
   const tmpPath = req.file?.path
-
   try {
     const { is_no, is_id, mevcut_ozet = '' } = req.body
 
@@ -124,20 +184,36 @@ router.post('/', upload.single('file'), async (req, res) => {
     // 2. Gemini analizi
     const analiz = await analyzeWithGemini(metin, mevcut_ozet)
 
-    // 3. Directus'a kaydet (kudeb_belgeler)
+    // 3. Eşleşen iş ve uyarı
+    let isIds = []
+    let uyari = null
+
+    if (is_id) {
+      isIds = [parseInt(is_id)]
+      // Fuzzy kontrol
+      const eslesen = await findMatchingJobs(analiz)
+      const esEslesen = eslesen.find((e) => e.id === parseInt(is_id))
+      if (esEslesen?.eslesme === 'fuzzy') uyari = esEslesen.uyari
+    }
+
+    // 4. Directus belge kaydı
     const belgeId = await saveToDirectus({
-      is_no,
       dosya_adi: req.file.originalname,
       tur: analiz.tur || 'Gelen',
       kimden: analiz.kimden || '',
       kime: analiz.kime || '',
       tarih: analiz.tarih || null,
+      sayi: analiz.sayi || '',
       konu: analiz.konu || '',
       ozet: analiz.ozet || '',
+      ilce: analiz.ilce || '',
+      mahalle: analiz.mahalle || '',
+      ada: analiz.ada || '',
+      parsel: analiz.parsel || '',
       tam_metin: metin.slice(0, 32000),
-    })
+    }, isIds, uyari)
 
-    // 4. Paperless-ngx'e yükle (orijinal PDF)
+    // 5. Paperless'a yükle
     const paperlessId = await saveToPaperless(tmpPath, req.file.originalname, {
       is_no,
       ilce: analiz.ilce,
@@ -148,12 +224,25 @@ router.post('/', upload.single('file'), async (req, res) => {
       sayi: analiz.sayi,
     })
 
-    // Paperless ID'yi Directus belge kaydına ekle
+    // 6. Paperless ID'yi belge kaydına yaz
     if (paperlessId && belgeId) {
-      await saveToDirectus({ paperless_id: paperlessId }, belgeId)
+      await saveToDirectus({ _updateId: belgeId, paperless_id: paperlessId })
     }
 
-    // 5. Geçici dosyayı sil
+    // 7. İş kaydına eski_ada/parsel yaz (yoksa)
+    if (is_id && (analiz.eski_ada || analiz.eski_parsel)) {
+      const isRes = await directusClient.get(`/items/kudeb_isler/${is_id}`, {
+        params: { fields: 'eski_ada,eski_parsel' },
+      }).catch(() => null)
+      const is = isRes?.data?.data
+      if (is && !is.eski_ada && analiz.eski_ada) {
+        await directusClient.patch(`/items/kudeb_isler/${is_id}`, {
+          eski_ada: analiz.eski_ada,
+          ...(analiz.eski_parsel && !is.eski_parsel && { eski_parsel: analiz.eski_parsel }),
+        }).catch(() => {})
+      }
+    }
+
     await unlink(tmpPath).catch(() => {})
 
     res.json({
@@ -161,7 +250,8 @@ router.post('/', upload.single('file'), async (req, res) => {
       belge_id: belgeId,
       paperless_id: paperlessId,
       sayfa_sayisi,
-      analiz,  // React formu bu veriyle dolar
+      uyari,
+      analiz,
     })
 
   } catch (err) {
@@ -171,13 +261,10 @@ router.post('/', upload.single('file'), async (req, res) => {
   }
 })
 
-/**
- * GET /upload/belgeler/:is_no
- * Bir işe ait tüm belgeleri döner
- */
+// ─── GET /belgeler/:is_no ────────────────────────────────────────────────────
+
 router.get('/belgeler/:is_no', async (req, res) => {
   try {
-    const { getBelgelerByIsNo } = await import('../services/storage.js')
     const belgeler = await getBelgelerByIsNo(req.params.is_no)
     res.json({ data: belgeler })
   } catch (err) {
@@ -185,13 +272,10 @@ router.get('/belgeler/:is_no', async (req, res) => {
   }
 })
 
-/**
- * DELETE /upload/belgeler/:belge_id
- * Directus'tan belgeyi siler (Paperless'ta kayıt kalır)
- */
+// ─── DELETE /belgeler/:belge_id ──────────────────────────────────────────────
+
 router.delete('/belgeler/:belge_id', async (req, res) => {
   try {
-    const { deleteBelge } = await import('../services/storage.js')
     await deleteBelge(req.params.belge_id)
     res.json({ success: true })
   } catch (err) {
