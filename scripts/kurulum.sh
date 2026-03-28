@@ -338,6 +338,23 @@ koleksiyon_olustur "kudeb_arazi_fotograflari" "photo_camera" "Arazi ziyaret foto
 
 # ═══════════════════════════════════════════════════════════════════════════════
 echo ""
+echo "[13] kudeb_fotograflar..."
+koleksiyon_olustur "kudeb_fotograflar" "photo_library" "Google Drive fotoğraf kayıtları" '[
+  {"field":"id","type":"uuid","schema":{"is_primary_key":true},"meta":{"hidden":true}},
+  {"field":"is_no","type":"string","schema":{"is_nullable":false},"meta":{"note":"İş numarası (filtre için)"}},
+  {"field":"drive_file_id","type":"string","schema":{"is_nullable":false},"meta":{"note":"Google Drive dosya ID"}},
+  {"field":"drive_klasor_id","type":"string","schema":{"is_nullable":true},"meta":{"note":"İnceleme klasör ID"}},
+  {"field":"dosya_adi","type":"string","schema":{"is_nullable":true},"meta":{"note":"Orijinal dosya adı"}},
+  {"field":"web_view_link","type":"string","schema":{"is_nullable":true},"meta":{"note":"Drive görüntüleme linki"}},
+  {"field":"thumbnail_link","type":"string","schema":{"is_nullable":true},"meta":{"note":"Küçük resim URL"}},
+  {"field":"boyut","type":"string","schema":{"is_nullable":true},"meta":{"note":"Dosya boyutu (byte)"}},
+  {"field":"inceleme_tarihi","type":"date","schema":{"is_nullable":true},"meta":{"note":"İnceleme tarihi"}},
+  {"field":"inceleme_aciklama","type":"string","schema":{"is_nullable":true},"meta":{"note":"Klasör açıklaması"}},
+  {"field":"date_created","type":"timestamp","meta":{"special":["date-created"],"hidden":true}}
+]'
+
+# ═══════════════════════════════════════════════════════════════════════════════
+echo ""
 echo "================================================"
 echo " Kurulum tamamlandı!"
 echo "================================================"
